@@ -10,8 +10,9 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.layout.*;
+import javafx.scene.shape.Arc;
+import javafx.scene.shape.ArcType;
 import javafx.scene.shape.Circle;
-import javafx.scene.shape.SVGPath;
 import javafx.stage.Stage;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -38,6 +39,13 @@ public class MainApp extends Application {
     // Gráficos
     private PieChart graficoCategoria;
     private BarChart<String, Number> graficoMensal;
+    private LineChart<String, Number> graficoTendencia;
+
+    // Progress bars
+    private ProgressBar progReceitas;
+    private ProgressBar progDespesas;
+    private Label progReceitasLabel;
+    private Label progDespesasLabel;
 
     // Atalhos de teclado
     private KeyCombination atalhoNovo = new KeyCodeCombination(KeyCode.N, KeyCombination.CONTROL_DOWN);
@@ -65,13 +73,13 @@ public class MainApp extends Application {
         root.setCenter(scrollPane);
 
         // Carregar CSS
-        Scene scene = new Scene(root, 1200, 800);
+        Scene scene = new Scene(root, 1400, 900);
         scene.getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
 
         // Atalhos de teclado
         configurarAtalhosTeclado(scene);
 
-        primaryStage.setTitle("Calculadora de Gastos");
+        primaryStage.setTitle("Dashboard Financeiro");
         primaryStage.setScene(scene);
         primaryStage.setMaximized(true);
         primaryStage.setOnCloseRequest(e -> salvarAoFechar());
@@ -99,13 +107,13 @@ public class MainApp extends Application {
         VBox headerContent = new VBox();
         headerContent.getStyleClass().add("header-content");
 
-        Label titulo = new Label("Minhas Finanças");
+        Label titulo = new Label("💰 Dashboard Financeiro");
         titulo.getStyleClass().add("app-title");
 
         Tooltip tooltipTitulo = new Tooltip("Controle total das suas finanças pessoais");
         Tooltip.install(titulo, tooltipTitulo);
 
-        Label subtitulo = new Label("Gerencie receitas e despesas de forma inteligente");
+        Label subtitulo = new Label("Acompanhe receitas, despesas e tendências em tempo real");
         subtitulo.getStyleClass().add("app-subtitle");
 
         headerContent.getChildren().addAll(titulo, subtitulo);
@@ -120,13 +128,16 @@ public class MainApp extends Application {
         // Cards de estatísticas
         GridPane cardsGrid = criarCardsEstatisticas();
 
-        // Seção de gráficos
-        HBox graficos = criarGraficos();
+        // Container de gráficos em grid 2x2
+        GridPane graficosGrid = criarGridGraficos();
+
+        // Progress bars para categorias
+        VBox progressSection = criarSecaoProgress();
 
         // Seção da tabela
         VBox tabelaSecao = criarSecaoTabela();
 
-        centro.getChildren().addAll(cardsGrid, graficos, tabelaSecao);
+        centro.getChildren().addAll(cardsGrid, graficosGrid, progressSection, tabelaSecao);
         return centro;
     }
 
@@ -238,25 +249,36 @@ public class MainApp extends Application {
         return (Label) info.getChildren().get(1);
     }
 
-    private HBox criarGraficos() {
-        HBox container = new HBox(20);
+    private GridPane criarGridGraficos() {
+        GridPane grid = new GridPane();
+        grid.setHgap(20);
+        grid.setVgap(20);
+
+        // Configurar colunas
+        ColumnConstraints col1 = new ColumnConstraints();
+        col1.setPercentWidth(33);
+        ColumnConstraints col2 = new ColumnConstraints();
+        col2.setPercentWidth(33);
+        ColumnConstraints col3 = new ColumnConstraints();
+        col3.setPercentWidth(34);
+
+        grid.getColumnConstraints().addAll(col1, col2, col3);
 
         // Gráfico de Pizza - Gastos por Categoria
         VBox pizzaContainer = new VBox();
         pizzaContainer.getStyleClass().add("chart-container");
         pizzaContainer.setMaxWidth(Double.MAX_VALUE);
-        HBox.setHgrow(pizzaContainer, Priority.ALWAYS);
 
-        Label tituloPizza = new Label("Distribuição de Despesas");
+        Label tituloPizza = new Label("📊 Despesas por Categoria");
         tituloPizza.getStyleClass().add("chart-title");
 
         graficoCategoria = new PieChart();
         graficoCategoria.setTitle("");
         graficoCategoria.setLegendVisible(true);
         graficoCategoria.getStyleClass().add("chart");
-
-        Tooltip tooltipPizza = new Tooltip("Visualize como suas despesas estão distribuídas por categoria");
-        Tooltip.install(pizzaContainer, tooltipPizza);
+        graficoCategoria.setMinHeight(400);
+        graficoCategoria.setPrefHeight(450);
+        graficoCategoria.setLabelsVisible(true);
 
         pizzaContainer.getChildren().addAll(tituloPizza, graficoCategoria);
 
@@ -264,28 +286,119 @@ public class MainApp extends Application {
         VBox barrasContainer = new VBox();
         barrasContainer.getStyleClass().add("chart-container");
         barrasContainer.setMaxWidth(Double.MAX_VALUE);
-        HBox.setHgrow(barrasContainer, Priority.ALWAYS);
 
-        Label tituloBarras = new Label("Comparativo Financeiro");
+        Label tituloBarras = new Label("📈 Comparativo Financeiro");
         tituloBarras.getStyleClass().add("chart-title");
 
         CategoryAxis xAxis = new CategoryAxis();
         NumberAxis yAxis = new NumberAxis();
-        xAxis.setLabel("Categoria");
+        xAxis.setLabel("");
         yAxis.setLabel("Valor (R$)");
+
+        // Configurar eixo X para centralizar labels
+        xAxis.setTickLabelRotation(0);
+        xAxis.setTickMarkVisible(true);
 
         graficoMensal = new BarChart<>(xAxis, yAxis);
         graficoMensal.setTitle("");
         graficoMensal.setLegendVisible(false);
         graficoMensal.getStyleClass().add("chart");
-
-        Tooltip tooltipBarras = new Tooltip("Compare suas receitas com suas despesas");
-        Tooltip.install(barrasContainer, tooltipBarras);
+        graficoMensal.setMinHeight(400);
+        graficoMensal.setPrefHeight(450);
+        graficoMensal.setBarGap(3);
+        graficoMensal.setCategoryGap(60);
 
         barrasContainer.getChildren().addAll(tituloBarras, graficoMensal);
 
-        container.getChildren().addAll(pizzaContainer, barrasContainer);
-        return container;
+        // Gráfico de Linha - Tendência
+        VBox linhaContainer = new VBox();
+        linhaContainer.getStyleClass().add("chart-container");
+        linhaContainer.setMaxWidth(Double.MAX_VALUE);
+
+        Label tituloLinha = new Label("📉 Tendência Mensal");
+        tituloLinha.getStyleClass().add("chart-title");
+
+        CategoryAxis xAxisLinha = new CategoryAxis();
+        NumberAxis yAxisLinha = new NumberAxis();
+        xAxisLinha.setLabel("");
+        yAxisLinha.setLabel("Saldo (R$)");
+
+        graficoTendencia = new LineChart<>(xAxisLinha, yAxisLinha);
+        graficoTendencia.setTitle("");
+        graficoTendencia.setCreateSymbols(true);
+        graficoTendencia.getStyleClass().add("chart");
+        graficoTendencia.setMinHeight(400);
+        graficoTendencia.setPrefHeight(450);
+
+        linhaContainer.getChildren().addAll(tituloLinha, graficoTendencia);
+
+        grid.add(pizzaContainer, 0, 0);
+        grid.add(barrasContainer, 1, 0);
+        grid.add(linhaContainer, 2, 0);
+
+        return grid;
+    }
+
+    private VBox criarSecaoProgress() {
+        VBox secao = new VBox(16);
+        secao.getStyleClass().add("content-section");
+        secao.setMaxWidth(Double.MAX_VALUE);
+
+        Label titulo = new Label("💹 Distribuição do Orçamento");
+        titulo.getStyleClass().add("section-title");
+
+        // Progress bar Receitas
+        VBox progReceitasBox = new VBox(8);
+        HBox receitasHeader = new HBox();
+        receitasHeader.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(receitasHeader, Priority.ALWAYS);
+
+        Label lblReceitas = new Label("Receitas Totais");
+        lblReceitas.getStyleClass().add("progress-label");
+        lblReceitas.setStyle("-fx-text-fill: #10b981;");
+
+        progReceitasLabel = new Label("R$ 0,00");
+        progReceitasLabel.getStyleClass().add("progress-label");
+        progReceitasLabel.setStyle("-fx-text-fill: #10b981; -fx-font-weight: 700;");
+
+        Region spacer1 = new Region();
+        HBox.setHgrow(spacer1, Priority.ALWAYS);
+        receitasHeader.getChildren().addAll(lblReceitas, spacer1, progReceitasLabel);
+
+        progReceitas = new ProgressBar(0);
+        progReceitas.setMaxWidth(Double.MAX_VALUE);
+        progReceitas.getStyleClass().add("progress-bar");
+        progReceitas.setStyle("-fx-accent: #10b981;");
+
+        progReceitasBox.getChildren().addAll(receitasHeader, progReceitas);
+
+        // Progress bar Despesas
+        VBox progDespesasBox = new VBox(8);
+        HBox despesasHeader = new HBox();
+        despesasHeader.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(despesasHeader, Priority.ALWAYS);
+
+        Label lblDespesas = new Label("Despesas Totais");
+        lblDespesas.getStyleClass().add("progress-label");
+        lblDespesas.setStyle("-fx-text-fill: #ef4444;");
+
+        progDespesasLabel = new Label("R$ 0,00");
+        progDespesasLabel.getStyleClass().add("progress-label");
+        progDespesasLabel.setStyle("-fx-text-fill: #ef4444; -fx-font-weight: 700;");
+
+        Region spacer2 = new Region();
+        HBox.setHgrow(spacer2, Priority.ALWAYS);
+        despesasHeader.getChildren().addAll(lblDespesas, spacer2, progDespesasLabel);
+
+        progDespesas = new ProgressBar(0);
+        progDespesas.setMaxWidth(Double.MAX_VALUE);
+        progDespesas.getStyleClass().add("progress-bar");
+        progDespesas.setStyle("-fx-accent: #ef4444;");
+
+        progDespesasBox.getChildren().addAll(despesasHeader, progDespesas);
+
+        secao.getChildren().addAll(titulo, progReceitasBox, progDespesasBox);
+        return secao;
     }
 
     private VBox criarSecaoTabela() {
@@ -508,6 +621,19 @@ public class MainApp extends Application {
         labelDespesas.setText(String.format("R$ %.2f", despesas));
         labelTotal.setText(String.valueOf(calculadora.getTransacoes().size()));
 
+        // Atualizar progress bars
+        double total = receitas + despesas;
+        if (total > 0) {
+            progReceitas.setProgress(receitas / total);
+            progDespesas.setProgress(despesas / total);
+        } else {
+            progReceitas.setProgress(0);
+            progDespesas.setProgress(0);
+        }
+
+        progReceitasLabel.setText(String.format("R$ %.2f (%.0f%%)", receitas, total > 0 ? (receitas / total * 100) : 0));
+        progDespesasLabel.setText(String.format("R$ %.2f (%.0f%%)", despesas, total > 0 ? (despesas / total * 100) : 0));
+
         // Atualizar gráficos
         atualizarGraficos();
     }
@@ -526,18 +652,45 @@ public class MainApp extends Application {
             pieData.add(new PieChart.Data("Sem dados", 1));
         } else {
             gastosPorCategoria.forEach((categoria, valor) ->
-                    pieData.add(new PieChart.Data(categoria + " (R$ " +
-                            String.format("%.2f", valor) + ")", valor)));
+                    pieData.add(new PieChart.Data(categoria + "\nR$ " +
+                            String.format("%.2f", valor), valor)));
         }
         graficoCategoria.setData(pieData);
 
-        // Gráfico de Barras
+        // Gráfico de Barras - Definir categorias explicitamente
+        CategoryAxis xAxis = (CategoryAxis) graficoMensal.getXAxis();
+        ObservableList<String> categorias = FXCollections.observableArrayList("Receitas", "Despesas");
+        xAxis.setCategories(categorias);
+
         XYChart.Series<String, Number> series = new XYChart.Series<>();
+        series.setName("Valores");
         series.getData().add(new XYChart.Data<>("Receitas", calcularReceitas()));
         series.getData().add(new XYChart.Data<>("Despesas", calcularDespesas()));
 
         graficoMensal.getData().clear();
         graficoMensal.getData().add(series);
+
+        // Gráfico de Linha - Tendência (últimos 6 meses)
+        XYChart.Series<String, Number> serieLinha = new XYChart.Series<>();
+        serieLinha.setName("Saldo");
+
+        // Dados simulados para demonstração
+        LocalDate hoje = LocalDate.now();
+        for (int i = 5; i >= 0; i--) {
+            LocalDate mes = hoje.minusMonths(i);
+            String nomeMes = mes.getMonth().name().substring(0, 3);
+
+            // Calcular saldo até aquele mês
+            double saldoMes = calculadora.getTransacoes().stream()
+                .filter(t -> !t.getData().isAfter(mes))
+                .mapToDouble(t -> t.getTipo().equals("Receita") ? t.getValor() : -t.getValor())
+                .sum();
+
+            serieLinha.getData().add(new XYChart.Data<>(nomeMes, saldoMes));
+        }
+
+        graficoTendencia.getData().clear();
+        graficoTendencia.getData().add(serieLinha);
     }
 
     private double calcularReceitas() {
@@ -770,3 +923,4 @@ public class MainApp extends Application {
         launch(args);
     }
 }
+
