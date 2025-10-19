@@ -6,11 +6,17 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.chart.*;
 import javafx.scene.control.*;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyCombination;
 import javafx.scene.layout.*;
+import javafx.scene.shape.Circle;
+import javafx.scene.shape.SVGPath;
 import javafx.stage.Stage;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 public class MainApp extends Application {
 
@@ -33,6 +39,10 @@ public class MainApp extends Application {
     private PieChart graficoCategoria;
     private BarChart<String, Number> graficoMensal;
 
+    // Atalhos de teclado
+    private KeyCombination atalhoNovo = new KeyCodeCombination(KeyCode.N, KeyCombination.CONTROL_DOWN);
+    private KeyCombination atalhoRemover = new KeyCodeCombination(KeyCode.DELETE);
+
     @Override
     public void start(Stage primaryStage) {
         // Carregar dados
@@ -51,12 +61,15 @@ public class MainApp extends Application {
         VBox centro = criarCentro();
         ScrollPane scrollPane = new ScrollPane(centro);
         scrollPane.setFitToWidth(true);
-        scrollPane.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
+        scrollPane.getStyleClass().add("scroll-pane");
         root.setCenter(scrollPane);
 
         // Carregar CSS
         Scene scene = new Scene(root, 1200, 800);
         scene.getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
+
+        // Atalhos de teclado
+        configurarAtalhosTeclado(scene);
 
         primaryStage.setTitle("Calculadora de Gastos");
         primaryStage.setScene(scene);
@@ -67,22 +80,41 @@ public class MainApp extends Application {
         atualizarInterface();
     }
 
+    private void configurarAtalhosTeclado(Scene scene) {
+        scene.setOnKeyPressed(event -> {
+            if (atalhoNovo.match(event)) {
+                adicionarTransacao();
+            } else if (atalhoRemover.match(event)) {
+                if (tabelaTransacao.getSelectionModel().getSelectedItem() != null) {
+                    removerTransacao();
+                }
+            }
+        });
+    }
+
     private VBox criarTopo() {
-        VBox topo = new VBox(5);
+        VBox topo = new VBox();
         topo.getStyleClass().add("top-bar");
+
+        VBox headerContent = new VBox();
+        headerContent.getStyleClass().add("header-content");
 
         Label titulo = new Label("Minhas Finanças");
         titulo.getStyleClass().add("app-title");
 
-        Label subtitulo = new Label("Controle completo dos seus gastos");
+        Tooltip tooltipTitulo = new Tooltip("Controle total das suas finanças pessoais");
+        Tooltip.install(titulo, tooltipTitulo);
+
+        Label subtitulo = new Label("Gerencie receitas e despesas de forma inteligente");
         subtitulo.getStyleClass().add("app-subtitle");
 
-        topo.getChildren().addAll(titulo, subtitulo);
+        headerContent.getChildren().addAll(titulo, subtitulo);
+        topo.getChildren().add(headerContent);
         return topo;
     }
 
     private VBox criarCentro() {
-        VBox centro = new VBox(20);
+        VBox centro = new VBox(24);
         centro.getStyleClass().add("content-wrapper");
 
         // Cards de estatísticas
@@ -101,29 +133,33 @@ public class MainApp extends Application {
     private GridPane criarCardsEstatisticas() {
         GridPane grid = new GridPane();
         grid.getStyleClass().add("stats-grid");
-        grid.setHgap(15);
-        grid.setVgap(15);
 
         // Card Saldo
-        VBox cardSaldo = criarCard("💳", "Saldo Atual", "R$ 0,00", "saldo");
-        labelSaldo = (Label) ((VBox) cardSaldo.getChildren().get(1)).getChildren().get(1);
+        VBox cardSaldo = criarCard("SALDO ATUAL", "R$ 0,00", "saldo",
+                "Diferença entre receitas e despesas");
+        labelSaldo = buscarLabelValor(cardSaldo);
 
         // Card Receitas
-        VBox cardReceitas = criarCard("💚", "Receitas", "R$ 0,00", "receitas");
-        labelReceitas = (Label) ((VBox) cardReceitas.getChildren().get(1)).getChildren().get(1);
+        VBox cardReceitas = criarCard("RECEITAS", "R$ 0,00", "receitas",
+                "Total de entradas de dinheiro");
+        labelReceitas = buscarLabelValor(cardReceitas);
 
         // Card Despesas
-        VBox cardDespesas = criarCard("💔", "Despesas", "R$ 0,00", "despesas");
-        labelDespesas = (Label) ((VBox) cardDespesas.getChildren().get(1)).getChildren().get(1);
+        VBox cardDespesas = criarCard("DESPESAS", "R$ 0,00", "despesas",
+                "Total de saídas de dinheiro");
+        labelDespesas = buscarLabelValor(cardDespesas);
 
         // Card Total Transações
-        VBox cardTotal = criarCard("📊", "Transações", "0", "transacoes");
-        labelTotal = (Label) ((VBox) cardTotal.getChildren().get(1)).getChildren().get(1);
+        VBox cardTotal = criarCard("TRANSAÇÕES", "0", "transacoes",
+                "Número total de registros");
+        labelTotal = buscarLabelValor(cardTotal);
 
         // Configurar colunas responsivas
-        ColumnConstraints col = new ColumnConstraints();
-        col.setPercentWidth(25);
-        grid.getColumnConstraints().addAll(col, col, col, col);
+        for (int i = 0; i < 4; i++) {
+            ColumnConstraints col = new ColumnConstraints();
+            col.setPercentWidth(25);
+            grid.getColumnConstraints().add(col);
+        }
 
         grid.add(cardSaldo, 0, 0);
         grid.add(cardReceitas, 1, 0);
@@ -133,42 +169,85 @@ public class MainApp extends Application {
         return grid;
     }
 
-    private VBox criarCard(String icone, String titulo, String valorInicial, String tipo) {
-        VBox card = new VBox(15);
+    private VBox criarCard(String titulo, String valorInicial, String tipo, String tooltipText) {
+        VBox card = new VBox();
         card.getStyleClass().add("stat-card");
-        card.setAlignment(Pos.TOP_LEFT);
+
+        VBox content = new VBox();
+        content.getStyleClass().add("stat-card-content");
 
         // Header com ícone
-        HBox header = new HBox(10);
-        header.setAlignment(Pos.CENTER_LEFT);
+        HBox header = new HBox();
+        header.getStyleClass().add("stat-header");
 
-        Label iconLabel = new Label(icone);
-        iconLabel.getStyleClass().addAll("stat-icon", "stat-icon-" + tipo);
+        // Ícone usando Circle
+        StackPane iconContainer = new StackPane();
+        iconContainer.getStyleClass().addAll("stat-icon-container", "stat-icon-" + tipo);
 
-        VBox titleBox = new VBox(3);
-        Label tituloLabel = new Label(titulo.toUpperCase());
-        tituloLabel.getStyleClass().add("stat-label");
+        Label iconLabel = criarIcone(tipo);
+        iconContainer.getChildren().add(iconLabel);
 
-        Label valorLabel = new Label(valorInicial);
-        valorLabel.getStyleClass().add("stat-value");
+        header.getChildren().add(iconContainer);
 
-        titleBox.getChildren().addAll(tituloLabel, valorLabel);
-        header.getChildren().addAll(iconLabel);
+        // Info do card
+        VBox info = new VBox();
+        info.getStyleClass().add("stat-info");
 
-        card.getChildren().addAll(header, titleBox);
+        Label labelTitulo = new Label(titulo);
+        labelTitulo.getStyleClass().add("stat-label");
+
+        Label labelValor = new Label(valorInicial);
+        labelValor.getStyleClass().add("stat-value");
+
+        info.getChildren().addAll(labelTitulo, labelValor);
+        content.getChildren().addAll(header, info);
+        card.getChildren().add(content);
+
+        // Tooltip
+        Tooltip tooltip = new Tooltip(tooltipText);
+        Tooltip.install(card, tooltip);
+
         return card;
     }
 
+    private Label criarIcone(String tipo) {
+        Label icon = new Label();
+        icon.getStyleClass().add("stat-icon");
+
+        switch (tipo) {
+            case "saldo":
+                icon.setText("$");
+                break;
+            case "receitas":
+                icon.setText("↑");
+                break;
+            case "despesas":
+                icon.setText("↓");
+                break;
+            case "transacoes":
+                icon.setText("≡");
+                break;
+        }
+
+        return icon;
+    }
+
+    private Label buscarLabelValor(VBox card) {
+        VBox content = (VBox) card.getChildren().get(0);
+        VBox info = (VBox) content.getChildren().get(1);
+        return (Label) info.getChildren().get(1);
+    }
+
     private HBox criarGraficos() {
-        HBox container = new HBox(15);
+        HBox container = new HBox(20);
 
         // Gráfico de Pizza - Gastos por Categoria
-        VBox pizzaContainer = new VBox(10);
+        VBox pizzaContainer = new VBox();
         pizzaContainer.getStyleClass().add("chart-container");
         pizzaContainer.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(pizzaContainer, Priority.ALWAYS);
 
-        Label tituloPizza = new Label("Gastos por Categoria");
+        Label tituloPizza = new Label("Distribuição de Despesas");
         tituloPizza.getStyleClass().add("chart-title");
 
         graficoCategoria = new PieChart();
@@ -176,26 +255,32 @@ public class MainApp extends Application {
         graficoCategoria.setLegendVisible(true);
         graficoCategoria.getStyleClass().add("chart");
 
+        Tooltip tooltipPizza = new Tooltip("Visualize como suas despesas estão distribuídas por categoria");
+        Tooltip.install(pizzaContainer, tooltipPizza);
+
         pizzaContainer.getChildren().addAll(tituloPizza, graficoCategoria);
 
         // Gráfico de Barras - Receitas vs Despesas
-        VBox barrasContainer = new VBox(10);
+        VBox barrasContainer = new VBox();
         barrasContainer.getStyleClass().add("chart-container");
         barrasContainer.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(barrasContainer, Priority.ALWAYS);
 
-        Label tituloBarras = new Label("Receitas vs Despesas");
+        Label tituloBarras = new Label("Comparativo Financeiro");
         tituloBarras.getStyleClass().add("chart-title");
 
         CategoryAxis xAxis = new CategoryAxis();
         NumberAxis yAxis = new NumberAxis();
-        xAxis.setLabel("Tipo");
+        xAxis.setLabel("Categoria");
         yAxis.setLabel("Valor (R$)");
 
         graficoMensal = new BarChart<>(xAxis, yAxis);
         graficoMensal.setTitle("");
         graficoMensal.setLegendVisible(false);
         graficoMensal.getStyleClass().add("chart");
+
+        Tooltip tooltipBarras = new Tooltip("Compare suas receitas com suas despesas");
+        Tooltip.install(barrasContainer, tooltipBarras);
 
         barrasContainer.getChildren().addAll(tituloBarras, graficoMensal);
 
@@ -204,17 +289,20 @@ public class MainApp extends Application {
     }
 
     private VBox criarSecaoTabela() {
-        VBox secao = new VBox(15);
-        secao.getStyleClass().add("table-section");
+        VBox secao = new VBox();
+        secao.getStyleClass().add("content-section");
 
         // Header
-        HBox header = new HBox();
-        header.setAlignment(Pos.CENTER_LEFT);
+        VBox header = new VBox();
         header.getStyleClass().add("section-header");
 
-        Label titulo = new Label("Transações Recentes");
+        Label titulo = new Label("Histórico de Transações");
         titulo.getStyleClass().add("section-title");
-        header.getChildren().add(titulo);
+
+        Label subtitulo = new Label("Visualize e gerencie todas as suas movimentações financeiras");
+        subtitulo.getStyleClass().add("section-subtitle");
+
+        header.getChildren().addAll(titulo, subtitulo);
 
         // Barra de busca e filtros
         HBox barraBusca = criarBarraBusca();
@@ -230,31 +318,42 @@ public class MainApp extends Application {
     }
 
     private HBox criarBarraBusca() {
-        HBox barra = new HBox(10);
+        HBox barra = new HBox(12);
         barra.getStyleClass().add("search-bar");
-        barra.setAlignment(Pos.CENTER_LEFT);
 
         campoBusca = new TextField();
         campoBusca.setPromptText("Buscar por descrição...");
         campoBusca.getStyleClass().add("search-field");
         campoBusca.textProperty().addListener((obs, old, novo) -> filtrarTransacoes());
 
+        Tooltip tooltipBusca = new Tooltip("Digite para filtrar transações pela descrição");
+        campoBusca.setTooltip(tooltipBusca);
+
         filtroTipo = new ComboBox<>();
-        filtroTipo.getItems().addAll("Todos", "Receita", "Despesa");
-        filtroTipo.setValue("Todos");
+        filtroTipo.getItems().addAll("Todos os Tipos", "Receita", "Despesa");
+        filtroTipo.setValue("Todos os Tipos");
         filtroTipo.getStyleClass().add("filter-combo");
         filtroTipo.setOnAction(e -> filtrarTransacoes());
 
+        Tooltip tooltipTipo = new Tooltip("Filtrar por tipo de transação");
+        filtroTipo.setTooltip(tooltipTipo);
+
         filtroCategoria = new ComboBox<>();
-        filtroCategoria.getItems().addAll("Todas", "Alimentação", "Transporte",
+        filtroCategoria.getItems().addAll("Todas as Categorias", "Alimentação", "Transporte",
                 "Lazer", "Saúde", "Educação", "Salário", "Outros");
-        filtroCategoria.setValue("Todas");
+        filtroCategoria.setValue("Todas as Categorias");
         filtroCategoria.getStyleClass().add("filter-combo");
         filtroCategoria.setOnAction(e -> filtrarTransacoes());
+
+        Tooltip tooltipCategoria = new Tooltip("Filtrar por categoria");
+        filtroCategoria.setTooltip(tooltipCategoria);
 
         Button btnLimpar = new Button("Limpar Filtros");
         btnLimpar.getStyleClass().addAll("btn", "btn-secondary");
         btnLimpar.setOnAction(e -> limparFiltros());
+
+        Tooltip tooltipLimpar = new Tooltip("Remover todos os filtros aplicados");
+        btnLimpar.setTooltip(tooltipLimpar);
 
         HBox.setHgrow(campoBusca, Priority.ALWAYS);
         barra.getChildren().addAll(campoBusca, filtroTipo, filtroCategoria, btnLimpar);
@@ -264,6 +363,7 @@ public class MainApp extends Application {
     private TableView<Transacao> criarTabela() {
         TableView<Transacao> tabela = new TableView<>();
         tabela.setItems(transacoesObservable);
+        tabela.setPlaceholder(criarEstadoVazio());
 
         // Coluna Data
         TableColumn<Transacao, String> colData = new TableColumn<>("Data");
@@ -321,9 +421,9 @@ public class MainApp extends Application {
             @Override
             protected void updateItem(Double valor, boolean empty) {
                 super.updateItem(valor, empty);
+                getStyleClass().removeAll("valor-positivo", "valor-negativo");
                 if (empty || valor == null) {
                     setText(null);
-                    setStyle("");
                 } else {
                     setText(String.format("R$ %.2f", valor));
                     Transacao t = getTableView().getItems().get(getIndex());
@@ -340,24 +440,55 @@ public class MainApp extends Application {
         tabela.getColumns().addAll(colData, colDescricao, colCategoria, colTipo, colValor);
         tabela.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
+        // Permitir seleção múltipla
+        tabela.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
+
         return tabela;
     }
 
+    private VBox criarEstadoVazio() {
+        VBox emptyState = new VBox(16);
+        emptyState.getStyleClass().add("empty-state");
+
+        Label icon = new Label("📊");
+        icon.getStyleClass().add("empty-state-icon");
+
+        Label title = new Label("Nenhuma transação encontrada");
+        title.getStyleClass().add("empty-state-title");
+
+        Label message = new Label("Adicione sua primeira transação para começar a controlar suas finanças");
+        message.getStyleClass().add("empty-state-message");
+        message.setWrapText(true);
+        message.setMaxWidth(300);
+
+        emptyState.getChildren().addAll(icon, title, message);
+        return emptyState;
+    }
+
     private HBox criarBotoes() {
-        HBox botoes = new HBox(10);
+        HBox botoes = new HBox();
         botoes.getStyleClass().add("button-bar");
 
         Button btnAdicionar = new Button("Nova Transação");
         btnAdicionar.getStyleClass().addAll("btn", "btn-primary");
         btnAdicionar.setOnAction(e -> adicionarTransacao());
 
+        Tooltip tooltipAdicionar = new Tooltip("Adicionar nova transação (Ctrl+N)");
+        btnAdicionar.setTooltip(tooltipAdicionar);
+
         Button btnEditar = new Button("Editar");
         btnEditar.getStyleClass().addAll("btn", "btn-secondary");
         btnEditar.setOnAction(e -> editarTransacao());
 
+        Tooltip tooltipEditar = new Tooltip("Editar transação selecionada");
+        btnEditar.setTooltip(tooltipEditar);
+
         Button btnRemover = new Button("Remover");
         btnRemover.getStyleClass().addAll("btn", "btn-danger");
         btnRemover.setOnAction(e -> removerTransacao());
+
+        Tooltip tooltipRemover = new Tooltip("Remover transação selecionada (Delete)");
+        btnRemover.setTooltip(tooltipRemover);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -391,9 +522,13 @@ public class MainApp extends Application {
         }
 
         ObservableList<PieChart.Data> pieData = FXCollections.observableArrayList();
-        gastosPorCategoria.forEach((categoria, valor) ->
-                pieData.add(new PieChart.Data(categoria + " (R$ " +
-                        String.format("%.2f", valor) + ")", valor)));
+        if (gastosPorCategoria.isEmpty()) {
+            pieData.add(new PieChart.Data("Sem dados", 1));
+        } else {
+            gastosPorCategoria.forEach((categoria, valor) ->
+                    pieData.add(new PieChart.Data(categoria + " (R$ " +
+                            String.format("%.2f", valor) + ")", valor)));
+        }
         graficoCategoria.setData(pieData);
 
         // Gráfico de Barras
@@ -427,8 +562,8 @@ public class MainApp extends Application {
         ObservableList<Transacao> filtradas = FXCollections.observableArrayList(
                 calculadora.getTransacoes().stream()
                         .filter(t -> t.getDescricao().toLowerCase().contains(busca))
-                        .filter(t -> tipo.equals("Todos") || t.getTipo().equals(tipo))
-                        .filter(t -> categoria.equals("Todas") || t.getCategoria().equals(categoria))
+                        .filter(t -> tipo.equals("Todos os Tipos") || t.getTipo().equals(tipo))
+                        .filter(t -> categoria.equals("Todas as Categorias") || t.getCategoria().equals(categoria))
                         .toList()
         );
 
@@ -437,120 +572,192 @@ public class MainApp extends Application {
 
     private void limparFiltros() {
         campoBusca.clear();
-        filtroTipo.setValue("Todos");
-        filtroCategoria.setValue("Todas");
+        filtroTipo.setValue("Todos os Tipos");
+        filtroCategoria.setValue("Todas as Categorias");
         tabelaTransacao.setItems(transacoesObservable);
     }
 
     private void adicionarTransacao() {
         Dialog<Transacao> dialog = new Dialog<>();
         dialog.setTitle("Nova Transação");
-        dialog.setHeaderText("💰 Adicionar uma nova transação");
+        dialog.setHeaderText("Adicionar uma nova transação");
 
         GridPane grid = new GridPane();
         grid.getStyleClass().add("form-grid");
-        grid.setHgap(10);
-        grid.setVgap(15);
-        grid.setPadding(new Insets(20));
+        grid.setHgap(20);
+        grid.setVgap(20);
+        grid.setPadding(new Insets(32));
 
+        // Data
+        Label lblData = new Label("Data");
+        lblData.getStyleClass().add("form-label");
         DatePicker datePicker = new DatePicker(LocalDate.now());
+        datePicker.setTooltip(new Tooltip("Selecione a data da transação"));
+
+        // Descrição
+        Label lblDescricao = new Label("Descrição");
+        lblDescricao.getStyleClass().add("form-label");
         TextField txtDescricao = new TextField();
         txtDescricao.setPromptText("Ex: Almoço no restaurante");
+        txtDescricao.setTooltip(new Tooltip("Descreva a transação de forma clara"));
+
+        // Valor
+        Label lblValor = new Label("Valor");
+        lblValor.getStyleClass().add("form-label");
         TextField txtValor = new TextField();
         txtValor.setPromptText("Ex: 45,50");
+        txtValor.setTooltip(new Tooltip("Valor em reais (use vírgula ou ponto)"));
+
+        Label errorValor = new Label("");
+        errorValor.getStyleClass().add("error-message");
+        errorValor.setVisible(false);
+
+        // Validação em tempo real
+        txtValor.textProperty().addListener((obs, old, novo) -> {
+            if (!novo.isEmpty()) {
+                try {
+                    Double.parseDouble(novo.replace(",", "."));
+                    txtValor.getStyleClass().remove("text-field-error");
+                    errorValor.setVisible(false);
+                } catch (NumberFormatException e) {
+                    txtValor.getStyleClass().add("text-field-error");
+                    errorValor.setText("Valor inválido");
+                    errorValor.setVisible(true);
+                }
+            }
+        });
+
+        // Tipo
+        Label lblTipo = new Label("Tipo");
+        lblTipo.getStyleClass().add("form-label");
         ComboBox<String> comboTipo = new ComboBox<>();
         comboTipo.getItems().addAll("Receita", "Despesa");
         comboTipo.setValue("Despesa");
+        comboTipo.setTooltip(new Tooltip("Entrada ou saída de dinheiro"));
+
+        // Categoria
+        Label lblCategoria = new Label("Categoria");
+        lblCategoria.getStyleClass().add("form-label");
         ComboBox<String> comboCategoria = new ComboBox<>();
         comboCategoria.getItems().addAll("Alimentação", "Transporte", "Lazer",
                 "Saúde", "Educação", "Salário", "Outros");
         comboCategoria.setValue("Outros");
+        comboCategoria.setTooltip(new Tooltip("Classifique a transação"));
 
-        grid.add(new Label("Data:"), 0, 0);
+        grid.add(lblData, 0, 0);
         grid.add(datePicker, 1, 0);
-        grid.add(new Label("Descrição:"), 0, 1);
+        grid.add(lblDescricao, 0, 1);
         grid.add(txtDescricao, 1, 1);
-        grid.add(new Label("Valor:"), 0, 2);
-        grid.add(txtValor, 1, 2);
-        grid.add(new Label("Tipo:"), 0, 3);
+        grid.add(lblValor, 0, 2);
+
+        VBox valorBox = new VBox(4, txtValor, errorValor);
+        grid.add(valorBox, 1, 2);
+
+        grid.add(lblTipo, 0, 3);
         grid.add(comboTipo, 1, 3);
-        grid.add(new Label("Categoria:"), 0, 4);
+        grid.add(lblCategoria, 0, 4);
         grid.add(comboCategoria, 1, 4);
 
         dialog.getDialogPane().setContent(grid);
         ButtonType btnSalvar = new ButtonType("Salvar", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(btnSalvar, ButtonType.CANCEL);
+        ButtonType btnCancelar = new ButtonType("Cancelar", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(btnSalvar, btnCancelar);
 
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == btnSalvar) {
                 try {
+                    if (txtDescricao.getText().trim().isEmpty()) {
+                        mostrarErro("Descrição obrigatória", "Por favor, informe uma descrição para a transação.");
+                        return null;
+                    }
+
                     double valor = Double.parseDouble(txtValor.getText().replace(",", "."));
+
+                    if (valor <= 0) {
+                        mostrarErro("Valor inválido", "O valor deve ser maior que zero.");
+                        return null;
+                    }
+
                     return new Transacao(datePicker.getValue(), valor,
                             txtDescricao.getText(), comboTipo.getValue(),
                             comboCategoria.getValue());
                 } catch (NumberFormatException e) {
-                    mostrarErro("Valor inválido!");
+                    mostrarErro("Valor inválido", "Por favor, informe um valor numérico válido.");
                     return null;
                 }
             }
             return null;
         });
 
-        dialog.showAndWait().ifPresent(transacao -> {
+        Optional<Transacao> resultado = dialog.showAndWait();
+        resultado.ifPresent(transacao -> {
             calculadora.adicionarTransacao(transacao);
             transacoesObservable.setAll(calculadora.getTransacoes());
             atualizarInterface();
+            mostrarSucesso("Transação adicionada com sucesso!");
         });
     }
 
     private void editarTransacao() {
         Transacao selecionada = tabelaTransacao.getSelectionModel().getSelectedItem();
         if (selecionada == null) {
-            mostrarAviso("Selecione uma transação para editar!");
+            mostrarAviso("Nenhuma seleção", "Por favor, selecione uma transação para editar.");
             return;
         }
-        // Implementar edição similar ao adicionar
-        mostrarInfo("Funcionalidade de edição em desenvolvimento!");
+        mostrarInfo("Em desenvolvimento", "A funcionalidade de edição estará disponível em breve.");
     }
 
     private void removerTransacao() {
         Transacao selecionada = tabelaTransacao.getSelectionModel().getSelectedItem();
         if (selecionada == null) {
-            mostrarAviso("Selecione uma transação para remover!");
+            mostrarAviso("Nenhuma seleção", "Por favor, selecione uma transação para remover.");
             return;
         }
 
         Alert confirmacao = new Alert(Alert.AlertType.CONFIRMATION);
-        confirmacao.setTitle("Confirmar");
-        confirmacao.setHeaderText("Tem certeza?");
-        confirmacao.setContentText("Deseja realmente remover esta transação?");
+        confirmacao.setTitle("Confirmar Exclusão");
+        confirmacao.setHeaderText("Deseja realmente remover esta transação?");
+        confirmacao.setContentText(String.format("%s - R$ %.2f",
+                selecionada.getDescricao(), selecionada.getValor()));
 
         confirmacao.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
                 calculadora.getTransacoes().remove(selecionada);
                 transacoesObservable.setAll(calculadora.getTransacoes());
                 atualizarInterface();
+                mostrarSucesso("Transação removida com sucesso!");
             }
         });
     }
 
-    private void mostrarErro(String mensagem) {
+    private void mostrarErro(String titulo, String mensagem) {
         Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle("Erro");
+        alert.setTitle(titulo);
+        alert.setHeaderText(titulo);
         alert.setContentText(mensagem);
         alert.showAndWait();
     }
 
-    private void mostrarAviso(String mensagem) {
+    private void mostrarAviso(String titulo, String mensagem) {
         Alert alert = new Alert(Alert.AlertType.WARNING);
-        alert.setTitle("Atenção");
+        alert.setTitle(titulo);
+        alert.setHeaderText(titulo);
         alert.setContentText(mensagem);
         alert.showAndWait();
     }
 
-    private void mostrarInfo(String mensagem) {
+    private void mostrarInfo(String titulo, String mensagem) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Informação");
+        alert.setTitle(titulo);
+        alert.setHeaderText(titulo);
+        alert.setContentText(mensagem);
+        alert.showAndWait();
+    }
+
+    private void mostrarSucesso(String mensagem) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Sucesso");
+        alert.setHeaderText(null);
         alert.setContentText(mensagem);
         alert.showAndWait();
     }
