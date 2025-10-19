@@ -30,3 +30,8 @@ bin/
 .DS_Store
 # Project exclude paths
 /target/
+
+# Arquivos criados
+transações.txt
+CalculadoraDeGastos.iml
+.idea
