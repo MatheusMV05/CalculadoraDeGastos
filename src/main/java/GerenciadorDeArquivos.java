@@ -1,7 +1,6 @@
 import java.io.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.io.File;
 
 public class GerenciadorDeArquivos {
     private static final String NOME_ARQUIVO = "transações.txt";

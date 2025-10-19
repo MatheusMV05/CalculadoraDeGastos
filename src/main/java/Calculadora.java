@@ -1,5 +1,4 @@
 import java.util.ArrayList;
-import java.time.LocalDate;
 
 public class Calculadora {
     private ArrayList<Transacao> transacoes;
